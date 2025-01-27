@@ -66,22 +66,18 @@ void renderGrid(SDL_Renderer* renderer) {
     }
 }
 
-// Function to render text using SDL_ttf
+// Function to render text
 void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y) {
-    SDL_Color textColor = {255, 255, 255}; // White text
+    SDL_Color textColor = {255, 255, 255};  // White text
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
-    if (textSurface == nullptr) {
-        std::cout << "Error rendering text: " << TTF_GetError() << std::endl;
+    if (!textSurface) {
+        std::cout << "Text rendering error: " << TTF_GetError() << std::endl;
         return;
     }
-    
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    
-    int textWidth = 0, textHeight = 0;
-    SDL_QueryTexture(textTexture, nullptr, nullptr, &textWidth, &textHeight);
-    
-    SDL_Rect destRect = {x, y, textWidth, textHeight};
+
+    SDL_Rect destRect = {x, y, textSurface->w, textSurface->h};
     SDL_RenderCopy(renderer, textTexture, nullptr, &destRect);
     SDL_DestroyTexture(textTexture);
 }
@@ -91,9 +87,8 @@ void gameOver(SDL_Renderer* renderer, TTF_Font* font, int score) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
     SDL_RenderClear(renderer);
 
-    // Render game over text and score
     renderText(renderer, font, "Game Over! Final Score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 4);
-    
+
     SDL_RenderPresent(renderer);
     SDL_Delay(3000); // Show for 3 seconds
 }
@@ -109,7 +104,6 @@ void saveScore(int score) {
 
 // Function to load Hall of Fame (fake scores)
 std::vector<Player> loadHallOfFame() {
-    // Fake Hall of Fame list of Redskins players
     std::vector<Player> hallOfFame = {
         {"Joe Theismann", 100},
         {"Darrell Green", 95},
@@ -133,9 +127,8 @@ void displayHallOfFame(SDL_Renderer* renderer, TTF_Font* font) {
 
     std::vector<Player> hallOfFame = loadHallOfFame();
 
-    // Display Hall of Fame
     renderText(renderer, font, "Hall of Fame", SCREEN_WIDTH / 3, SCREEN_HEIGHT / 4);
-    
+
     int yOffset = SCREEN_HEIGHT / 3;
     for (const auto& player : hallOfFame) {
         renderText(renderer, font, player.name + " - " + std::to_string(player.score), SCREEN_WIDTH / 4, yOffset);
@@ -154,10 +147,20 @@ std::string getRandomFunFact() {
     return funFacts[dis(gen)];
 }
 
+// Function to check if the food spawns on the snake
+bool isFoodOnSnake(const Position& food, const std::vector<Position>& snakeBody) {
+    for (const auto& segment : snakeBody) {
+        if (food.x == segment.x && food.y == segment.y) {
+            return true; // Food is on the snake
+        }
+    }
+    return false;
+}
+
 int main() {
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
-    TTF_Init(); // Initialize SDL_ttf
+    TTF_Init();
 
     SDL_Window* window = SDL_CreateWindow("3D-Like Snake Game - Redskins Helmet",
                                           SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -173,13 +176,6 @@ int main() {
         return 1;
     }
 
-    // Load font
-    TTF_Font* font = TTF_OpenFont("Arial.ttf", 24);
-    if (!font) {
-        std::cout << "Font loading failed: " << TTF_GetError() << std::endl;
-        return 1;
-    }
-
     // Load images
     SDL_Texture* helmetTexture = loadTexture("redskins_helmet.png", renderer);
     SDL_Texture* footballTexture = loadTexture("football.png", renderer);
@@ -189,12 +185,19 @@ int main() {
         return 1;
     }
 
+    // Load font
+    TTF_Font* font = TTF_OpenFont("arial.ttf", 24); // Make sure you have a font file in the correct location
+    if (!font) {
+        std::cout << "Error loading font: " << TTF_GetError() << std::endl;
+        return 1;
+    }
+
     // Game state variables
-    std::vector<Position> helmets;  // Snake-like body
+    std::vector<Position> snakeBody;  // Snake body
     Position food = {MAX_TILES_X / 2, MAX_TILES_Y / 2};  // Football position
     Position head = {MAX_TILES_X / 4, MAX_TILES_Y / 2};  // Start position of helmet
 
-    helmets.push_back(head);  // The first helmet is at the starting position
+    snakeBody.push_back(head);  // The first helmet is at the starting position
     bool quit = false;
     SDL_Event event;
     int score = 0;
@@ -250,22 +253,24 @@ int main() {
             // Check if the helmet eats the football (food)
             if (head.x == food.x && head.y == food.y) {
                 score++;  // Increase score
-                helmets.push_back(Position{food.x, food.y});  // Add new helmet to the body
-                food = {rand() % MAX_TILES_X, rand() % MAX_TILES_Y};  // Spawn new food
+                snakeBody.push_back(Position{food.x, food.y});  // Add new helmet to the body
+                do {
+                    food = {rand() % MAX_TILES_X, rand() % MAX_TILES_Y};  // Spawn new food
+                } while (isFoodOnSnake(food, snakeBody));  // Ensure food is not on the snake
             }
 
             // Move the rest of the helmets
-            for (size_t i = helmets.size() - 1; i > 0; --i) {
-                helmets[i] = helmets[i - 1];
+            for (size_t i = snakeBody.size() - 1; i > 0; --i) {
+                snakeBody[i] = snakeBody[i - 1];
             }
-            helmets[0] = head;
+            snakeBody[0] = head;
 
             // Update last move time
             lastMoveTime = currentTime;
         }
 
         // Render all helmets
-        for (const auto& helmet : helmets) {
+        for (const auto& helmet : snakeBody) {
             renderTexture(helmetTexture, renderer, helmet.x, helmet.y);
         }
 
@@ -290,7 +295,6 @@ int main() {
     SDL_DestroyTexture(footballTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
-
     TTF_CloseFont(font);
     TTF_Quit();
     IMG_Quit();
