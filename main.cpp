@@ -6,25 +6,23 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
-#include <ctime> // For random seed
+#include <chrono>
 
 // Game constants
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
-const int TILE_SIZE = 32;
+const int TILE_SIZE = 32; // Size of each tile (this creates a retro feel)
 const int MAX_TILES_X = SCREEN_WIDTH / TILE_SIZE;
 const int MAX_TILES_Y = SCREEN_HEIGHT / TILE_SIZE;
-const int FPS = 60;
 
-// Hall of Fame player data
+// Hall of Fame player data (Real players with fake scores)
+struct Position {
+    int x, y;
+};
+
 struct Player {
     std::string name;
     int score;
-};
-
-// Position struct to hold x and y coordinates
-struct Position {
-    int x, y;
 };
 
 // Function to load images
@@ -45,10 +43,15 @@ void renderTexture(SDL_Texture* tex, SDL_Renderer* renderer, int x, int y) {
     SDL_RenderCopy(renderer, tex, nullptr, &dest);
 }
 
-// Placeholder renderText function (You can improve it using SDL_ttf later)
-void renderText(SDL_Renderer* renderer, const std::string& text, int x, int y) {
-    // For now, just print text to the console
-    std::cout << text << std::endl;
+// Function to render the grid (retro effect)
+void renderGrid(SDL_Renderer* renderer) {
+    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);  // Dark gray grid lines
+    for (int x = 0; x < MAX_TILES_X; ++x) {
+        SDL_RenderDrawLine(renderer, x * TILE_SIZE, 0, x * TILE_SIZE, SCREEN_HEIGHT);  // Vertical grid lines
+    }
+    for (int y = 0; y < MAX_TILES_Y; ++y) {
+        SDL_RenderDrawLine(renderer, 0, y * TILE_SIZE, SCREEN_WIDTH, y * TILE_SIZE);  // Horizontal grid lines
+    }
 }
 
 // Function to display the game over screen
@@ -56,6 +59,8 @@ void gameOver(SDL_Renderer* renderer, int score) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
     SDL_RenderClear(renderer);
 
+    // Render game over text and score
+    SDL_Color textColor = {255, 255, 255};  // White text
     renderText(renderer, "Game Over! Final Score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 4);
     
     SDL_RenderPresent(renderer);
@@ -73,6 +78,7 @@ void saveScore(int score) {
 
 // Function to load Hall of Fame (fake scores)
 std::vector<Player> loadHallOfFame() {
+    // Fake Hall of Fame list of Redskins players
     std::vector<Player> hallOfFame = {
         {"Joe Theismann", 100},
         {"Darrell Green", 95},
@@ -81,6 +87,7 @@ std::vector<Player> loadHallOfFame() {
         {"Champ Bailey", 80}
     };
 
+    // Sort players by score in descending order
     std::sort(hallOfFame.begin(), hallOfFame.end(), [](const Player& a, const Player& b) {
         return a.score > b.score;
     });
@@ -95,47 +102,25 @@ void displayHallOfFame(SDL_Renderer* renderer) {
 
     std::vector<Player> hallOfFame = loadHallOfFame();
 
+    // Display Hall of Fame
     renderText(renderer, "Hall of Fame", SCREEN_WIDTH / 3, SCREEN_HEIGHT / 4);
     
     int yOffset = SCREEN_HEIGHT / 3;
     for (const auto& player : hallOfFame) {
         renderText(renderer, player.name + " - " + std::to_string(player.score), SCREEN_WIDTH / 4, yOffset);
-        yOffset += 30;
+        yOffset += 30; // Adjust spacing
     }
 
     SDL_RenderPresent(renderer);
     SDL_Delay(5000); // Show Hall of Fame for 5 seconds
 }
 
-// Function to generate random food position
-Position getRandomFoodPosition(const std::vector<Position>& helmets) {
-    Position food;
-    bool collision;
-
-    do {
-        collision = false;
-        food.x = rand() % MAX_TILES_X;
-        food.y = rand() % MAX_TILES_Y;
-
-        // Check if the food overlaps with any part of the helmet (snake)
-        for (const auto& helmet : helmets) {
-            if (food.x == helmet.x && food.y == helmet.y) {
-                collision = true;
-                break;
-            }
-        }
-    } while (collision);
-
-    return food;
-}
-
 int main() {
-    srand(static_cast<unsigned int>(time(0))); // Initialize random seed
-
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
 
-    SDL_Window* window = SDL_CreateWindow("3D-Like Snake Game - Redskins Helmet", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    SDL_Window* window = SDL_CreateWindow("3D-Like Snake Game - Redskins Helmet",
+                                          SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                           SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
         std::cout << "Window creation failed: " << SDL_GetError() << std::endl;
@@ -158,20 +143,28 @@ int main() {
     }
 
     // Game state variables
-    std::vector<Position> helmets;
-    Position food = {MAX_TILES_X / 2, MAX_TILES_Y / 2}; 
-    Position head = {MAX_TILES_X / 4, MAX_TILES_Y / 2};
+    std::vector<Position> helmets;  // Snake-like body
+    Position food = {MAX_TILES_X / 2, MAX_TILES_Y / 2};  // Football position
+    Position head = {MAX_TILES_X / 4, MAX_TILES_Y / 2};  // Start position of helmet
 
-    helmets.push_back(head);
+    helmets.push_back(head);  // The first helmet is at the starting position
     bool quit = false;
     SDL_Event event;
     int score = 0;
-    int dx = 1, dy = 0;
+    int dx = 1, dy = 0;  // Direction of movement (right)
 
+    // Timing variables to control the snake's speed
+    auto lastMoveTime = std::chrono::steady_clock::now();
+    const std::chrono::milliseconds moveInterval(300); // Delay between each snake movement
+
+    // Game loop
     while (!quit) {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); 
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);  // Black background
         SDL_RenderClear(renderer);
 
+        renderGrid(renderer); // Render grid background
+
+        // Handle events
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 quit = true;
@@ -188,38 +181,51 @@ int main() {
             }
         }
 
-        head.x += dx;
-        head.y += dy;
+        // Check if it's time to move the snake
+        auto currentTime = std::chrono::steady_clock::now();
+        if (currentTime - lastMoveTime >= moveInterval) {
+            // Move the head of the helmet
+            head.x += dx;
+            head.y += dy;
 
-        if (head.x < 0 || head.x >= MAX_TILES_X || head.y < 0 || head.y >= MAX_TILES_Y) {
-            saveScore(score);
-            gameOver(renderer, score);
-            displayHallOfFame(renderer);
-            quit = true;
-            break;
+            // Check for collision with the walls
+            if (head.x < 0 || head.x >= MAX_TILES_X || head.y < 0 || head.y >= MAX_TILES_Y) {
+                saveScore(score);  // Save score to file
+                gameOver(renderer, score);
+                displayHallOfFame(renderer);  // Display the Hall of Fame after game over
+                quit = true;
+                break;
+            }
+
+            // Check if the helmet eats the football (food)
+            if (head.x == food.x && head.y == food.y) {
+                score++;  // Increase score
+                helmets.push_back(Position{food.x, food.y});  // Add new helmet to the body
+                food = {rand() % MAX_TILES_X, rand() % MAX_TILES_Y};  // Spawn new food
+            }
+
+            // Move the rest of the helmets
+            for (size_t i = helmets.size() - 1; i > 0; --i) {
+                helmets[i] = helmets[i - 1];
+            }
+            helmets[0] = head;
+
+            lastMoveTime = currentTime;  // Update last move time
         }
 
-        if (head.x == food.x && head.y == food.y) {
-            score++;
-            helmets.push_back(Position{food.x, food.y});
-            food = getRandomFoodPosition(helmets);  // Get new food position
-        }
-
-        for (size_t i = helmets.size() - 1; i > 0; --i) {
-            helmets[i] = helmets[i - 1];
-        }
-        helmets[0] = head;
-
+        // Render all helmets
         for (const auto& helmet : helmets) {
             renderTexture(helmetTexture, renderer, helmet.x, helmet.y);
         }
 
+        // Render the food (football)
         renderTexture(footballTexture, renderer, food.x, food.y);
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(1000 / FPS);
+        SDL_Delay(10);  // Small delay for smooth rendering
     }
 
+    // Clean up
     SDL_DestroyTexture(helmetTexture);
     SDL_DestroyTexture(footballTexture);
     SDL_DestroyRenderer(renderer);
