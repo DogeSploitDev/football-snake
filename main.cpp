@@ -1,5 +1,6 @@
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_ttf.h>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -65,21 +66,33 @@ void renderGrid(SDL_Renderer* renderer) {
     }
 }
 
-// Function to render text
-void renderText(SDL_Renderer* renderer, const std::string& text, int x, int y) {
-    // Here you would implement text rendering. SDL_ttf is ideal for rendering fonts.
-    // For this example, we will simulate text rendering with SDL's primitive methods.
-    std::cout << text << std::endl;  // Placeholder for text rendering
+// Function to render text using SDL_ttf
+void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y) {
+    SDL_Color textColor = {255, 255, 255}; // White text
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, text.c_str(), textColor);
+    if (textSurface == nullptr) {
+        std::cout << "Error rendering text: " << TTF_GetError() << std::endl;
+        return;
+    }
+    
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    
+    int textWidth = 0, textHeight = 0;
+    SDL_QueryTexture(textTexture, nullptr, nullptr, &textWidth, &textHeight);
+    
+    SDL_Rect destRect = {x, y, textWidth, textHeight};
+    SDL_RenderCopy(renderer, textTexture, nullptr, &destRect);
+    SDL_DestroyTexture(textTexture);
 }
 
 // Function to display the game over screen
-void gameOver(SDL_Renderer* renderer, int score) {
+void gameOver(SDL_Renderer* renderer, TTF_Font* font, int score) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
     SDL_RenderClear(renderer);
 
     // Render game over text and score
-    SDL_Color textColor = {255, 255, 255};  // White text
-    renderText(renderer, "Game Over! Final Score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 4);
+    renderText(renderer, font, "Game Over! Final Score: " + std::to_string(score), SCREEN_WIDTH / 4, SCREEN_HEIGHT / 4);
     
     SDL_RenderPresent(renderer);
     SDL_Delay(3000); // Show for 3 seconds
@@ -114,18 +127,18 @@ std::vector<Player> loadHallOfFame() {
 }
 
 // Function to display the Hall of Fame
-void displayHallOfFame(SDL_Renderer* renderer) {
+void displayHallOfFame(SDL_Renderer* renderer, TTF_Font* font) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
     SDL_RenderClear(renderer);
 
     std::vector<Player> hallOfFame = loadHallOfFame();
 
     // Display Hall of Fame
-    renderText(renderer, "Hall of Fame", SCREEN_WIDTH / 3, SCREEN_HEIGHT / 4);
+    renderText(renderer, font, "Hall of Fame", SCREEN_WIDTH / 3, SCREEN_HEIGHT / 4);
     
     int yOffset = SCREEN_HEIGHT / 3;
     for (const auto& player : hallOfFame) {
-        renderText(renderer, player.name + " - " + std::to_string(player.score), SCREEN_WIDTH / 4, yOffset);
+        renderText(renderer, font, player.name + " - " + std::to_string(player.score), SCREEN_WIDTH / 4, yOffset);
         yOffset += 30; // Adjust spacing
     }
 
@@ -144,6 +157,7 @@ std::string getRandomFunFact() {
 int main() {
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
+    TTF_Init(); // Initialize SDL_ttf
 
     SDL_Window* window = SDL_CreateWindow("3D-Like Snake Game - Redskins Helmet",
                                           SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -156,6 +170,13 @@ int main() {
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer) {
         std::cout << "Renderer creation failed: " << SDL_GetError() << std::endl;
+        return 1;
+    }
+
+    // Load font
+    TTF_Font* font = TTF_OpenFont("Arial.ttf", 24);
+    if (!font) {
+        std::cout << "Font loading failed: " << TTF_GetError() << std::endl;
         return 1;
     }
 
@@ -220,8 +241,8 @@ int main() {
             // Check for collision with the walls
             if (head.x < 0 || head.x >= MAX_TILES_X || head.y < 0 || head.y >= MAX_TILES_Y) {
                 saveScore(score);  // Save score to file
-                gameOver(renderer, score);
-                displayHallOfFame(renderer);  // Display the Hall of Fame after game over
+                gameOver(renderer, font, score);
+                displayHallOfFame(renderer, font);  // Display the Hall of Fame after game over
                 quit = true;
                 break;
             }
@@ -253,12 +274,12 @@ int main() {
 
         // Render score and time elapsed
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
-        renderText(renderer, "Score: " + std::to_string(score), 10, 10);
-        renderText(renderer, "Time: " + std::to_string(elapsed) + "s", 10, 40);
+        renderText(renderer, font, "Score: " + std::to_string(score), 10, 10);
+        renderText(renderer, font, "Time: " + std::to_string(elapsed) + "s", 10, 40);
 
         // Random Redskins Fun Fact
         std::string randomFact = getRandomFunFact();
-        renderText(renderer, randomFact, SCREEN_WIDTH / 4, 10);
+        renderText(renderer, font, randomFact, SCREEN_WIDTH / 4, 10);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(1000 / FPS);  // Limit the frame rate
@@ -270,6 +291,8 @@ int main() {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
 
+    TTF_CloseFont(font);
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 
