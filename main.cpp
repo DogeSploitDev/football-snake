@@ -210,6 +210,12 @@ int main() {
     // Timer to track elapsed time
     auto startTime = std::chrono::steady_clock::now();
 
+    // Timer for fun facts display (change every 10 seconds)
+    auto lastFactTime = std::chrono::steady_clock::now();
+    const std::chrono::seconds factInterval(10); // Interval for changing the fun fact
+
+    std::string currentFunFact = getRandomFunFact(); // Initial fun fact
+
     // Game loop
     while (!quit) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);  // Black background
@@ -269,6 +275,12 @@ int main() {
             lastMoveTime = currentTime;
         }
 
+        // Change fun fact every 10 seconds
+        if (currentTime - lastFactTime >= factInterval) {
+            currentFunFact = getRandomFunFact();
+            lastFactTime = currentTime;
+        }
+
         // Render all helmets
         for (const auto& helmet : snakeBody) {
             renderTexture(helmetTexture, renderer, helmet.x, helmet.y);
@@ -282,9 +294,8 @@ int main() {
         renderText(renderer, font, "Score: " + std::to_string(score), 10, 10);
         renderText(renderer, font, "Time: " + std::to_string(elapsed) + "s", 10, 40);
 
-        // Random Redskins Fun Fact
-        std::string randomFact = getRandomFunFact();
-        renderText(renderer, font, randomFact, SCREEN_WIDTH / 4, 10);
+        // Render the current fun fact
+        renderText(renderer, font, currentFunFact, SCREEN_WIDTH / 4, 10);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(1000 / FPS);  // Limit the frame rate
