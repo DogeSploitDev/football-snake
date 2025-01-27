@@ -7,6 +7,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <random>
 
 // Game constants
 const int SCREEN_WIDTH = 800;
@@ -14,6 +15,7 @@ const int SCREEN_HEIGHT = 600;
 const int TILE_SIZE = 32; // Size of each tile (this creates a retro feel)
 const int MAX_TILES_X = SCREEN_WIDTH / TILE_SIZE;
 const int MAX_TILES_Y = SCREEN_HEIGHT / TILE_SIZE;
+const int FPS = 60;
 
 // Hall of Fame player data (Real players with fake scores)
 struct Position {
@@ -23,6 +25,15 @@ struct Position {
 struct Player {
     std::string name;
     int score;
+};
+
+// Fun facts about the Redskins
+std::vector<std::string> funFacts = {
+    "The Washington Redskins were founded in 1932.",
+    "Joe Theismann won the NFL MVP in 1983.",
+    "The Redskins have 5 Super Bowl appearances.",
+    "Art Monk is a Hall of Fame wide receiver for the Redskins.",
+    "The Washington Football team changed its name in 2020."
 };
 
 // Function to load images
@@ -52,6 +63,13 @@ void renderGrid(SDL_Renderer* renderer) {
     for (int y = 0; y < MAX_TILES_Y; ++y) {
         SDL_RenderDrawLine(renderer, 0, y * TILE_SIZE, SCREEN_WIDTH, y * TILE_SIZE);  // Horizontal grid lines
     }
+}
+
+// Function to render text
+void renderText(SDL_Renderer* renderer, const std::string& text, int x, int y) {
+    // Here you would implement text rendering. SDL_ttf is ideal for rendering fonts.
+    // For this example, we will simulate text rendering with SDL's primitive methods.
+    std::cout << text << std::endl;  // Placeholder for text rendering
 }
 
 // Function to display the game over screen
@@ -115,6 +133,14 @@ void displayHallOfFame(SDL_Renderer* renderer) {
     SDL_Delay(5000); // Show Hall of Fame for 5 seconds
 }
 
+// Function to get a random fun fact
+std::string getRandomFunFact() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, funFacts.size() - 1);
+    return funFacts[dis(gen)];
+}
+
 int main() {
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
@@ -156,6 +182,9 @@ int main() {
     // Timing variables to control the snake's speed
     auto lastMoveTime = std::chrono::steady_clock::now();
     const std::chrono::milliseconds moveInterval(300); // Delay between each snake movement
+
+    // Timer to track elapsed time
+    auto startTime = std::chrono::steady_clock::now();
 
     // Game loop
     while (!quit) {
@@ -210,7 +239,8 @@ int main() {
             }
             helmets[0] = head;
 
-            lastMoveTime = currentTime;  // Update last move time
+            // Update last move time
+            lastMoveTime = currentTime;
         }
 
         // Render all helmets
@@ -221,8 +251,17 @@ int main() {
         // Render the food (football)
         renderTexture(footballTexture, renderer, food.x, food.y);
 
+        // Render score and time elapsed
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
+        renderText(renderer, "Score: " + std::to_string(score), 10, 10);
+        renderText(renderer, "Time: " + std::to_string(elapsed) + "s", 10, 40);
+
+        // Random Redskins Fun Fact
+        std::string randomFact = getRandomFunFact();
+        renderText(renderer, randomFact, SCREEN_WIDTH / 4, 10);
+
         SDL_RenderPresent(renderer);
-        SDL_Delay(10);  // Small delay for smooth rendering
+        SDL_Delay(1000 / FPS);  // Limit the frame rate
     }
 
     // Clean up
